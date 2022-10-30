@@ -62,10 +62,55 @@ func (b *Backend) SetHealthStatus(status bool) {
 	b.IsHealthy = status
 }
 
+func (b *Backend) IncNumReq() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.NumReq++
+}
+
 func (b *Backend) GetHealthStatus() bool {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return b.IsHealthy
+}
+
+func (b *Backend) IsAlive() bool {
+	timeout := 5 * time.Second
+	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%s", b.Ip, b.Port), timeout)
+	if err != nil {
+		return false
+	}
+
+	defer conn.Close()
+	return true
+}
+
+func ShowBackendStatus() {
+	for _, v := range lb.Backends {
+		fmt.Println("===================")
+		fmt.Printf("Hostname:%s | Port:%s | NumRequest:%d | Alive:%v\n", v.Ip, v.Port, v.NumReq, v.IsHealthy)
+		fmt.Println("===================")
+	}
+}
+
+func Heartbeat() {
+	time := time.NewTicker(time.Minute * 1)
+	for {
+		select {
+		case <-time.C:
+			fmt.Println("Starting health checks...")
+			for _, v := range lb.Backends {
+				if v.IsAlive() == true && v.IsHealthy != true {
+					v.SetHealthStatus(true)
+				} else if v.IsAlive() == false && v.IsHealthy == true {
+					v.SetHealthStatus(false)
+				}
+			}
+			ShowBackendStatus()
+			fmt.Println("Finishing health checks...")
+		}
+	}
+
 }
 
 func (strategy *RoundRobin) GetBackend() *Backend {
@@ -104,11 +149,6 @@ func (lb *Lb) Forward(req IncomingReq) {
 		if healthStatus == true {
 			backend.SetHealthStatus(false)
 		}
-		for _, v := range lb.Backends {
-			fmt.Println("---------------------------")
-			fmt.Println(v.GetHealthStatus())
-			fmt.Println("---------------------------")
-		}
 		req.sourceConn.Write([]byte("Server is down"))
 		req.sourceConn.Close()
 		return
@@ -120,13 +160,8 @@ func (lb *Lb) Forward(req IncomingReq) {
 		backend.SetHealthStatus(true)
 	}
 
-	backend.NumReq++
+	backend.IncNumReq()
 
-	for _, v := range lb.Backends {
-		fmt.Println("---------------------------")
-		fmt.Println(v)
-		fmt.Println("---------------------------")
-	}
 	go io.Copy(backendConn, req.sourceConn)
 	go io.Copy(req.sourceConn, backendConn)
 }
@@ -136,5 +171,6 @@ var strategy *RoundRobin
 
 func main() {
 	InitLb()
+	go Heartbeat()
 	lb.Run()
 }
