@@ -142,6 +142,10 @@ func (lb *Lb) Run() {
 func (lb *Lb) Forward(req IncomingReq) {
 	backend := lb.Strategy.GetBackend()
 
+	if backend.GetHealthStatus() != true {
+		fmt.Printf("Server is down :: %s\n", backend.Port)
+	}
+
 	backendConn, err := net.Dial("tcp", fmt.Sprintf("%s:%s", backend.Ip, backend.Port))
 	if err != nil {
 		fmt.Printf("Error connecting to backend server at port :: %s\n", backend.Port)
