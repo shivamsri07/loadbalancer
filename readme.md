@@ -19,4 +19,6 @@ To see it in action,
 
 Check the logs in the terminal to see the output.
 
-> It also performs health checks on every 1 minutes and show the status of all the backend servers.
+It also performs health checks on every 1 minutes and show the status of all the backend servers.
+
+Do checkout the article I have written on this: https://shvm.me/articles/load-balancer
